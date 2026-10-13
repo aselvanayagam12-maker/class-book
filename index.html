@@ -116,6 +116,32 @@
   }
   dialog::backdrop { background: rgba(0,0,0,.35); }
   .dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+
+  /* Attendance */
+  .hint { font-size: 14px; color: var(--muted); margin: -4px 0 12px; }
+  .att-summary { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 15px; }
+  .att-status { font-size: 14px; }
+  .att-status.unsaved { color: var(--danger); font-weight: 600; }
+  .att-status.saved { color: var(--accent); }
+  .att-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 14px 12px;
+    margin-bottom: 6px;
+    font-size: 16px;
+    text-align: left;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--accent-soft);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .att-row .pill { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .att-row.absent { background: var(--danger-soft); border-color: #f5c2bd; }
+  .att-row.absent .pill { color: var(--danger); }
+  .att-save { width: 100%; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -125,6 +151,7 @@
   <nav>
     <button data-tab="classes" class="active">Classes</button>
     <button data-tab="students">Students</button>
+    <button data-tab="attendance">Attendance</button>
   </nav>
 </header>
 
@@ -198,6 +225,31 @@
       <div id="left-list"></div>
     </div>
   </section>
+
+  <!-- ========== ATTENDANCE TAB ========== -->
+  <section id="tab-attendance" class="hidden">
+    <div class="card">
+      <h2>Take attendance</h2>
+      <p id="att-no-class" class="empty hidden">Add a class first, then you can take attendance.</p>
+      <div id="att-picker">
+        <div class="row">
+          <label>Class
+            <select id="att-class"></select>
+          </label>
+          <label>Date
+            <input id="att-date" type="date">
+          </label>
+        </div>
+        <p id="att-day-hint" class="hint hidden"></p>
+        <div id="att-sheet"></div>
+      </div>
+    </div>
+
+    <div class="card" id="att-history-card">
+      <h2>Saved attendance for this class</h2>
+      <div id="att-history"></div>
+    </div>
+  </section>
 </main>
 
 <!-- Pop-up for editing a class -->
@@ -255,9 +307,13 @@ const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 function loadData() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved && Array.isArray(saved.classes) && Array.isArray(saved.students)) return saved;
+    if (saved && Array.isArray(saved.classes) && Array.isArray(saved.students)) {
+      // Data saved before attendance existed won't have this list yet
+      if (!Array.isArray(saved.attendance)) saved.attendance = [];
+      return saved;
+    }
   } catch (e) {}
-  return { version: 1, classes: [], students: [] };
+  return { version: 1, classes: [], students: [], attendance: [] };
 }
 
 let data = loadData();
@@ -571,11 +627,172 @@ function cameBack(id) {
   renderAll();
 }
 
+// ---------- Attendance ----------
+// One saved record per class per date: { id, classId, date, absent: [studentIds] }
+// Everyone not in "absent" was present.
+
+function dayName(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return DAYS[(new Date(y, m - 1, d).getDay() + 6) % 7];
+}
+
+function findAttendance(classId, date) {
+  return data.attendance.find(a => a.classId === classId && a.date === date);
+}
+
+// Students in this class on this date: joined on or before it, and hadn't left yet
+function studentsOn(classId, date) {
+  return data.students
+    .filter(s => s.classId === classId && s.joined <= date && (!s.left || s.left.date > date))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// What's on screen right now (not saved until "Save" is tapped)
+let attKey = "";
+let attAbsent = new Set();
+let attDirty = false;
+
+function renderAttendance() {
+  const classSel = document.getElementById("att-class");
+  const dateInput = document.getElementById("att-date");
+  const hasClasses = data.classes.length > 0;
+  document.getElementById("att-no-class").classList.toggle("hidden", hasClasses);
+  document.getElementById("att-picker").classList.toggle("hidden", !hasClasses);
+  document.getElementById("att-history-card").classList.toggle("hidden", !hasClasses);
+  if (!hasClasses) return;
+
+  const current = classSel.value;
+  classSel.innerHTML = classOptions(current);
+  dateInput.max = today();
+  if (!dateInput.value) dateInput.value = today();
+
+  const classId = classSel.value;
+  const date = dateInput.value;
+  const cls = findClass(classId);
+  const record = findAttendance(classId, date);
+
+  // Switched to a different class or date: start from what was saved (or everyone present)
+  const key = classId + "|" + date;
+  if (key !== attKey) {
+    attKey = key;
+    attAbsent = new Set(record ? record.absent : []);
+    attDirty = false;
+  }
+
+  const hint = document.getElementById("att-day-hint");
+  const otherDay = date && dayName(date) !== cls.day;
+  hint.classList.toggle("hidden", !otherDay);
+  if (otherDay) hint.textContent = `Note: this date is a ${dayName(date)}. ${cls.name} is usually on ${cls.day}.`;
+
+  const sheet = document.getElementById("att-sheet");
+  const students = date ? studentsOn(classId, date) : [];
+  if (!date) {
+    sheet.innerHTML = '<p class="empty">Pick a date.</p>';
+  } else if (students.length === 0) {
+    sheet.innerHTML = '<p class="empty">No students were in this class on this date.</p>';
+  } else {
+    const absentCount = students.filter(s => attAbsent.has(s.id)).length;
+    let status;
+    if (attDirty) status = '<span class="att-status unsaved">Not saved yet</span>';
+    else if (record) status = '<span class="att-status saved">Saved ✓</span>';
+    else status = '<span class="att-status unsaved">Not saved yet</span>';
+
+    sheet.innerHTML = `
+      <p class="hint">Everyone starts as present. Tap a name to mark them absent.</p>
+      <div class="att-summary">
+        <span><b>${students.length - absentCount}</b> present · <b>${absentCount}</b> absent</span>
+        ${status}
+      </div>
+      ${students.map(s => {
+        const absent = attAbsent.has(s.id);
+        return `<button type="button" class="att-row ${absent ? "absent" : ""}" onclick="toggleAbsent('${s.id}')">
+          <span>${esc(s.name)}</span>
+          <span class="pill">${absent ? "✗ Absent" : "✓ Present"}</span>
+        </button>`;
+      }).join("")}
+      <button class="btn att-save" type="button" onclick="saveAttendance()">${record ? "Save changes" : "Save attendance"}</button>`;
+  }
+
+  renderAttendanceHistory(classId);
+}
+
+function renderAttendanceHistory(classId) {
+  const box = document.getElementById("att-history");
+  const records = data.attendance
+    .filter(a => a.classId === classId)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 10);
+  if (records.length === 0) {
+    box.innerHTML = '<p class="empty">No attendance saved for this class yet.</p>';
+    return;
+  }
+  box.innerHTML = records.map(a => {
+    const names = a.absent.map(id => findStudent(id)).filter(Boolean).map(s => esc(s.name));
+    return `
+      <div class="list-item">
+        <div>
+          <div class="title">${dayName(a.date)}, ${niceDate(a.date)}</div>
+          <div class="sub">${names.length === 0 ? "Everyone present" : names.length + " absent: " + names.join(", ")}</div>
+        </div>
+        <div class="actions">
+          <button class="btn light small" onclick="openAttendance('${a.date}')">Open</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function toggleAbsent(id) {
+  if (attAbsent.has(id)) attAbsent.delete(id);
+  else attAbsent.add(id);
+  attDirty = true;
+  renderAttendance();
+}
+
+function saveAttendance() {
+  const classId = document.getElementById("att-class").value;
+  const date = document.getElementById("att-date").value;
+  const ids = studentsOn(classId, date).map(s => s.id);
+  const absent = [...attAbsent].filter(id => ids.includes(id));
+  const record = findAttendance(classId, date);
+  if (record) record.absent = absent;
+  else data.attendance.push({ id: newId(), classId, date, absent });
+  saveData();
+  attDirty = false;
+  showMessage(`Attendance saved for ${className(classId)}, ${niceDate(date)}.`);
+  renderAll();
+}
+
+// Ask before throwing away taps that weren't saved
+function okToLeaveAttendance() {
+  return !attDirty || confirm("You haven't saved this attendance. Leave without saving?");
+}
+
+function openAttendance(date) {
+  if (!okToLeaveAttendance()) return;
+  document.getElementById("att-date").value = date;
+  renderAttendance();
+}
+
+["att-class", "att-date"].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener("focus", () => { el.dataset.before = el.value; });
+  el.addEventListener("change", () => {
+    if (!okToLeaveAttendance()) { el.value = el.dataset.before; return; }
+    el.dataset.before = el.value;
+    renderAttendance();
+  });
+});
+
+window.addEventListener("beforeunload", e => {
+  if (attDirty) e.preventDefault();
+});
+
 // ---------- Draw everything ----------
 function renderAll() {
   renderClasses();
   renderStudentForm();
   renderStudents();
+  renderAttendance();
 }
 
 renderAll();
