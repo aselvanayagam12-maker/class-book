@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class Book</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --card: #ffffff;
+    --ink: #1f2933;
+    --muted: #6b7280;
+    --line: #e5e1d8;
+    --accent: #1f6f5c;
+    --accent-soft: #e3f0ec;
+    --danger: #b42318;
+    --danger-soft: #fdecea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 14px 16px 0;
+  }
+  header h1 { margin: 0 0 10px; font-size: 20px; }
+  nav { display: flex; gap: 4px; overflow-x: auto; }
+  nav button {
+    background: transparent;
+    border: 0;
+    color: #d6ebe4;
+    padding: 10px 14px;
+    font-size: 15px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+  }
+  nav button.active { background: var(--bg); color: var(--accent); font-weight: 600; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  input, select {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .row { display: flex; gap: 10px; }
+  .row > label { flex: 1; }
+  button.btn {
+    padding: 10px 16px;
+    font-size: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button.btn.light { background: #fff; color: var(--accent); }
+  button.btn.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+  button.btn.small { padding: 6px 10px; font-size: 14px; }
+  .list-item {
+    border-top: 1px solid var(--line);
+    padding: 12px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .list-item:first-child { border-top: 0; }
+  .list-item .title { font-weight: 600; }
+  .list-item .sub { font-size: 14px; color: var(--muted); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .empty { color: var(--muted); font-style: italic; }
+  .tag {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    margin-left: 6px;
+  }
+  .hidden { display: none; }
+  .msg {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .msg.error { background: var(--danger-soft); color: var(--danger); }
+  dialog {
+    border: 0;
+    border-radius: 12px;
+    padding: 16px;
+    width: min(440px, calc(100% - 32px));
+  }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  .dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+
+  /* Attendance */
+  .hint { font-size: 14px; color: var(--muted); margin: -4px 0 12px; }
+  .att-summary { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 15px; }
+  .att-status { font-size: 14px; }
+  .att-status.unsaved { color: var(--danger); font-weight: 600; }
+  .att-status.saved { color: var(--accent); }
+  .att-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 14px 12px;
+    margin-bottom: 6px;
+    font-size: 16px;
+    text-align: left;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--accent-soft);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .att-row .pill { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .att-row.absent { background: var(--danger-soft); border-color: #f5c2bd; }
+  .att-row.absent .pill { color: var(--danger); }
+  .att-save { width: 100%; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Class Book</h1>
+  <nav>
+    <button data-tab="classes" class="active">Classes</button>
+    <button data-tab="students">Students</button>
+    <button data-tab="attendance">Attendance</button>
+  </nav>
+</header>
+
+<main>
+  <div id="message" class="msg hidden"></div>
+
+  <!-- ========== CLASSES TAB ========== -->
+  <section id="tab-classes">
+    <div class="card">
+      <h2>Add a class</h2>
+      <form id="class-form">
+        <label>Class name
+          <input name="name" required placeholder="e.g. Grade 10 Maths">
+        </label>
+        <div class="row">
+          <label>Day
+            <select name="day" required></select>
+          </label>
+          <label>Time
+            <input name="time" type="time" required>
+          </label>
+        </div>
+        <label>Monthly fee (Rs.)
+          <input name="fee" type="number" min="0" step="1" required placeholder="e.g. 2500">
+        </label>
+        <button class="btn" type="submit">Add class</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Your classes</h2>
+      <div id="class-list"></div>
+    </div>
+  </section>
+
+  <!-- ========== STUDENTS TAB ========== -->
+  <section id="tab-students" class="hidden">
+    <div class="card">
+      <h2>Add a student</h2>
+      <p id="no-class-warning" class="empty hidden">Add a class first, then you can add students to it.</p>
+      <form id="student-form">
+        <label>Student name
+          <input name="name" required placeholder="e.g. Nimal Perera">
+        </label>
+        <label>Class
+          <select name="classId" required></select>
+        </label>
+        <label>Parent's phone
+          <input name="phone" type="tel" placeholder="e.g. 077 123 4567">
+        </label>
+        <label>Note (one line)
+          <input name="note" maxlength="120" placeholder="e.g. Needs extra help with algebra">
+        </label>
+        <label>Joined date
+          <input name="joined" type="date" required>
+        </label>
+        <button class="btn" type="submit">Add student</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Students</h2>
+      <label>Show class
+        <select id="student-filter"></select>
+      </label>
+      <div id="student-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Students who have left</h2>
+      <div id="left-list"></div>
+    </div>
+  </section>
+
+  <!-- ========== ATTENDANCE TAB ========== -->
+  <section id="tab-attendance" class="hidden">
+    <div class="card">
+      <h2>Take attendance</h2>
+      <p id="att-no-class" class="empty hidden">Add a class first, then you can take attendance.</p>
+      <div id="att-picker">
+        <div class="row">
+          <label>Class
+            <select id="att-class"></select>
+          </label>
+          <label>Date
+            <input id="att-date" type="date">
+          </label>
+        </div>
+        <p id="att-day-hint" class="hint hidden"></p>
+        <div id="att-sheet"></div>
+      </div>
+    </div>
+
+    <div class="card" id="att-history-card">
+      <h2>Saved attendance for this class</h2>
+      <div id="att-history"></div>
+    </div>
+  </section>
+</main>
+
+<!-- Pop-up for editing a class -->
+<dialog id="class-dialog">
+  <h2>Edit class</h2>
+  <form id="class-edit-form" method="dialog">
+    <label>Class name <input name="name" required></label>
+    <div class="row">
+      <label>Day <select name="day" required></select></label>
+      <label>Time <input name="time" type="time" required></label>
+    </div>
+    <label>Monthly fee (Rs.) <input name="fee" type="number" min="0" step="1" required></label>
+    <div class="dialog-buttons">
+      <button class="btn light" type="button" data-close>Cancel</button>
+      <button class="btn" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Pop-up for editing a student -->
+<dialog id="student-dialog">
+  <h2>Edit student</h2>
+  <form id="student-edit-form" method="dialog">
+    <label>Student name <input name="name" required></label>
+    <label>Class <select name="classId" required></select></label>
+    <label>Parent's phone <input name="phone" type="tel"></label>
+    <label>Note (one line) <input name="note" maxlength="120"></label>
+    <label>Joined date <input name="joined" type="date" required></label>
+    <div class="dialog-buttons">
+      <button class="btn light" type="button" data-close>Cancel</button>
+      <button class="btn" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Pop-up for marking a student as left -->
+<dialog id="left-dialog">
+  <h2>Mark as left</h2>
+  <form id="left-form" method="dialog">
+    <p id="left-name" style="margin-top:0"></p>
+    <label>Date they left <input name="date" type="date" required></label>
+    <label>Reason <input name="reason" required placeholder="e.g. Moved to another town"></label>
+    <div class="dialog-buttons">
+      <button class="btn light" type="button" data-close>Cancel</button>
+      <button class="btn danger" type="submit">Mark as left</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// ---------- Saving and loading (in this browser only) ----------
+const STORAGE_KEY = "classbook-data";
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function loadData() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved && Array.isArray(saved.classes) && Array.isArray(saved.students)) {
+      // Data saved before attendance existed won't have this list yet
+      if (!Array.isArray(saved.attendance)) saved.attendance = [];
+      return saved;
+    }
+  } catch (e) {}
+  return { version: 1, classes: [], students: [], attendance: [] };
+}
+
+let data = loadData();
+
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    showMessage("Could not save! Your browser may be full or in private mode.", true);
+  }
+}
+
+// ---------- Small helpers ----------
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function today() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function money(n) {
+  return "Rs. " + Number(n).toLocaleString("en-US");
+}
+
+function niceDate(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function niceTime(t) {
+  if (!t) return "";
+  let [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "pm" : "am";
+  h = h % 12 || 12;
+  return h + ":" + String(m).padStart(2, "0") + " " + ampm;
+}
+
+// Stops names typed by the user from breaking the page
+function esc(text) {
+  return String(text ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+let messageTimer;
+function showMessage(text, isError) {
+  const box = document.getElementById("message");
+  box.textContent = text;
+  box.className = "msg" + (isError ? " error" : "");
+  clearTimeout(messageTimer);
+  messageTimer = setTimeout(() => box.classList.add("hidden"), 3000);
+}
+
+function findClass(id) {
+  return data.classes.find(c => c.id === id);
+}
+
+function className(id) {
+  const c = findClass(id);
+  return c ? c.name : "(class removed)";
+}
+
+// ---------- Tabs ----------
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll("main > section").forEach(s => {
+      s.classList.toggle("hidden", s.id !== "tab-" + btn.dataset.tab);
+    });
+  });
+});
+
+// Cancel buttons in pop-ups
+document.querySelectorAll("[data-close]").forEach(btn => {
+  btn.addEventListener("click", () => btn.closest("dialog").close());
+});
+
+// Fill the day drop-downs
+document.querySelectorAll('select[name="day"]').forEach(sel => {
+  sel.innerHTML = DAYS.map(d => `<option>${d}</option>`).join("");
+});
+
+// ---------- Classes ----------
+function sortedClasses() {
+  return [...data.classes].sort((a, b) =>
+    DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.time.localeCompare(b.time));
+}
+
+function activeCount(classId) {
+  return data.students.filter(s => s.classId === classId && !s.left).length;
+}
+
+function renderClasses() {
+  const list = document.getElementById("class-list");
+  const classes = sortedClasses();
+  if (classes.length === 0) {
+    list.innerHTML = '<p class="empty">No classes yet. Add your first one above.</p>';
+    return;
+  }
+  list.innerHTML = classes.map(c => `
+    <div class="list-item">
+      <div>
+        <div class="title">${esc(c.name)}</div>
+        <div class="sub">${esc(c.day)}, ${niceTime(c.time)} · ${money(c.fee)} a month</div>
+        <div class="sub">${activeCount(c.id)} student(s)</div>
+      </div>
+      <div class="actions">
+        <button class="btn light small" onclick="editClass('${c.id}')">Edit</button>
+        <button class="btn danger small" onclick="removeClass('${c.id}')">Remove</button>
+      </div>
+    </div>`).join("");
+}
+
+document.getElementById("class-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target;
+  data.classes.push({
+    id: newId(),
+    name: f.name.value.trim(),
+    day: f.day.value,
+    time: f.time.value,
+    fee: Math.round(Number(f.fee.value))
+  });
+  saveData();
+  f.reset();
+  showMessage("Class added.");
+  renderAll();
+});
+
+let editingClassId = null;
+function editClass(id) {
+  const c = findClass(id);
+  const f = document.getElementById("class-edit-form");
+  editingClassId = id;
+  f.name.value = c.name;
+  f.day.value = c.day;
+  f.time.value = c.time;
+  f.fee.value = c.fee;
+  document.getElementById("class-dialog").showModal();
+}
+
+document.getElementById("class-edit-form").addEventListener("submit", e => {
+  const f = e.target;
+  const c = findClass(editingClassId);
+  c.name = f.name.value.trim();
+  c.day = f.day.value;
+  c.time = f.time.value;
+  c.fee = Math.round(Number(f.fee.value));
+  saveData();
+  showMessage("Class updated.");
+  renderAll();
+});
+
+function removeClass(id) {
+  const c = findClass(id);
+  const count = activeCount(id);
+  if (count > 0) {
+    alert(`"${c.name}" still has ${count} student(s). Move them to another class or mark them as left first.`);
+    return;
+  }
+  if (!confirm(`Remove the class "${c.name}"?`)) return;
+  data.classes = data.classes.filter(x => x.id !== id);
+  saveData();
+  showMessage("Class removed.");
+  renderAll();
+}
+
+// ---------- Students ----------
+function classOptions(selectedId) {
+  return sortedClasses().map(c =>
+    `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+}
+
+function renderStudentForm() {
+  const form = document.getElementById("student-form");
+  const hasClasses = data.classes.length > 0;
+  form.classList.toggle("hidden", !hasClasses);
+  document.getElementById("no-class-warning").classList.toggle("hidden", hasClasses);
+  const current = form.classId.value;
+  form.classId.innerHTML = classOptions(current);
+  if (!form.joined.value) form.joined.value = today();
+}
+
+function renderStudents() {
+  const filterSel = document.getElementById("student-filter");
+  const currentFilter = filterSel.value || "all";
+  filterSel.innerHTML = '<option value="all">All classes</option>' + classOptions(currentFilter);
+  filterSel.value = findClass(currentFilter) ? currentFilter : "all";
+
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const active = data.students
+    .filter(s => !s.left && (filterSel.value === "all" || s.classId === filterSel.value))
+    .sort(byName);
+  const left = data.students.filter(s => s.left).sort(byName);
+
+  const list = document.getElementById("student-list");
+  list.innerHTML = active.length === 0
+    ? '<p class="empty">No students here yet.</p>'
+    : active.map(s => `
+      <div class="list-item">
+        <div>
+          <div class="title">${esc(s.name)}</div>
+          <div class="sub">${esc(className(s.classId))} · joined ${niceDate(s.joined)}</div>
+          ${s.phone ? `<div class="sub">Parent: <a href="tel:${esc(s.phone)}">${esc(s.phone)}</a></div>` : ""}
+          ${s.note ? `<div class="sub">${esc(s.note)}</div>` : ""}
+        </div>
+        <div class="actions">
+          <button class="btn light small" onclick="editStudent('${s.id}')">Edit</button>
+          <button class="btn danger small" onclick="markLeft('${s.id}')">Left</button>
+        </div>
+      </div>`).join("");
+
+  const leftList = document.getElementById("left-list");
+  leftList.innerHTML = left.length === 0
+    ? '<p class="empty">Nobody has left.</p>'
+    : left.map(s => `
+      <div class="list-item">
+        <div>
+          <div class="title">${esc(s.name)}<span class="tag">Left</span></div>
+          <div class="sub">${esc(className(s.classId))} · left ${niceDate(s.left.date)}</div>
+          <div class="sub">Reason: ${esc(s.left.reason)}</div>
+        </div>
+        <div class="actions">
+          <button class="btn light small" onclick="cameBack('${s.id}')">Came back</button>
+        </div>
+      </div>`).join("");
+}
+
+document.getElementById("student-filter").addEventListener("change", renderStudents);
+
+document.getElementById("student-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target;
+  data.students.push({
+    id: newId(),
+    name: f.name.value.trim(),
+    classId: f.classId.value,
+    phone: f.phone.value.trim(),
+    note: f.note.value.trim(),
+    joined: f.joined.value,
+    left: null
+  });
+  saveData();
+  const keepClass = f.classId.value;
+  f.reset();
+  f.classId.value = keepClass;   // handy when adding many students to one class
+  f.joined.value = today();
+  showMessage("Student added.");
+  renderAll();
+});
+
+function findStudent(id) {
+  return data.students.find(s => s.id === id);
+}
+
+let editingStudentId = null;
+function editStudent(id) {
+  const s = findStudent(id);
+  const f = document.getElementById("student-edit-form");
+  editingStudentId = id;
+  f.classId.innerHTML = classOptions(s.classId);
+  f.name.value = s.name;
+  f.phone.value = s.phone;
+  f.note.value = s.note;
+  f.joined.value = s.joined;
+  document.getElementById("student-dialog").showModal();
+}
+
+document.getElementById("student-edit-form").addEventListener("submit", e => {
+  const f = e.target;
+  const s = findStudent(editingStudentId);
+  s.name = f.name.value.trim();
+  s.classId = f.classId.value;
+  s.phone = f.phone.value.trim();
+  s.note = f.note.value.trim();
+  s.joined = f.joined.value;
+  saveData();
+  showMessage("Student updated.");
+  renderAll();
+});
+
+let leavingStudentId = null;
+function markLeft(id) {
+  const s = findStudent(id);
+  const f = document.getElementById("left-form");
+  leavingStudentId = id;
+  f.reset();
+  f.date.value = today();
+  document.getElementById("left-name").textContent = s.name;
+  document.getElementById("left-dialog").showModal();
+}
+
+document.getElementById("left-form").addEventListener("submit", e => {
+  const f = e.target;
+  const s = findStudent(leavingStudentId);
+  s.left = { date: f.date.value, reason: f.reason.value.trim() };
+  saveData();
+  showMessage(s.name + " marked as left.");
+  renderAll();
+});
+
+function cameBack(id) {
+  const s = findStudent(id);
+  if (!findClass(s.classId)) {
+    alert("Their old class was removed. Use Edit after they come back to pick a new class.");
+  }
+  s.left = null;
+  saveData();
+  showMessage(s.name + " is back.");
+  renderAll();
+}
+
+// ---------- Attendance ----------
+// One saved record per class per date: { id, classId, date, absent: [studentIds] }
+// Everyone not in "absent" was present.
+
+function dayName(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return DAYS[(new Date(y, m - 1, d).getDay() + 6) % 7];
+}
+
+function findAttendance(classId, date) {
+  return data.attendance.find(a => a.classId === classId && a.date === date);
+}
+
+// Students in this class on this date: joined on or before it, and hadn't left yet
+function studentsOn(classId, date) {
+  return data.students
+    .filter(s => s.classId === classId && s.joined <= date && (!s.left || s.left.date > date))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// What's on screen right now (not saved until "Save" is tapped)
+let attKey = "";
+let attAbsent = new Set();
+let attDirty = false;
+
+function renderAttendance() {
+  const classSel = document.getElementById("att-class");
+  const dateInput = document.getElementById("att-date");
+  const hasClasses = data.classes.length > 0;
+  document.getElementById("att-no-class").classList.toggle("hidden", hasClasses);
+  document.getElementById("att-picker").classList.toggle("hidden", !hasClasses);
+  document.getElementById("att-history-card").classList.toggle("hidden", !hasClasses);
+  if (!hasClasses) return;
+
+  const current = classSel.value;
+  classSel.innerHTML = classOptions(current);
+  dateInput.max = today();
+  if (!dateInput.value) dateInput.value = today();
+
+  const classId = classSel.value;
+  const date = dateInput.value;
+  const cls = findClass(classId);
+  const record = findAttendance(classId, date);
+
+  // Switched to a different class or date: start from what was saved (or everyone present)
+  const key = classId + "|" + date;
+  if (key !== attKey) {
+    attKey = key;
+    attAbsent = new Set(record ? record.absent : []);
+    attDirty = false;
+  }
+
+  const hint = document.getElementById("att-day-hint");
+  const otherDay = date && dayName(date) !== cls.day;
+  hint.classList.toggle("hidden", !otherDay);
+  if (otherDay) hint.textContent = `Note: this date is a ${dayName(date)}. ${cls.name} is usually on ${cls.day}.`;
+
+  const sheet = document.getElementById("att-sheet");
+  const students = date ? studentsOn(classId, date) : [];
+  if (!date) {
+    sheet.innerHTML = '<p class="empty">Pick a date.</p>';
+  } else if (students.length === 0) {
+    sheet.innerHTML = '<p class="empty">No students were in this class on this date.</p>';
+  } else {
+    const absentCount = students.filter(s => attAbsent.has(s.id)).length;
+    let status;
+    if (attDirty) status = '<span class="att-status unsaved">Not saved yet</span>';
+    else if (record) status = '<span class="att-status saved">Saved ✓</span>';
+    else status = '<span class="att-status unsaved">Not saved yet</span>';
+
+    sheet.innerHTML = `
+      <p class="hint">Everyone starts as present. Tap a name to mark them absent.</p>
+      <div class="att-summary">
+        <span><b>${students.length - absentCount}</b> present · <b>${absentCount}</b> absent</span>
+        ${status}
+      </div>
+      ${students.map(s => {
+        const absent = attAbsent.has(s.id);
+        return `<button type="button" class="att-row ${absent ? "absent" : ""}" onclick="toggleAbsent('${s.id}')">
+          <span>${esc(s.name)}</span>
+          <span class="pill">${absent ? "✗ Absent" : "✓ Present"}</span>
+        </button>`;
+      }).join("")}
+      <button class="btn att-save" type="button" onclick="saveAttendance()">${record ? "Save changes" : "Save attendance"}</button>`;
+  }
+
+  renderAttendanceHistory(classId);
+}
+
+function renderAttendanceHistory(classId) {
+  const box = document.getElementById("att-history");
+  const records = data.attendance
+    .filter(a => a.classId === classId)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 10);
+  if (records.length === 0) {
+    box.innerHTML = '<p class="empty">No attendance saved for this class yet.</p>';
+    return;
+  }
+  box.innerHTML = records.map(a => {
+    const names = a.absent.map(id => findStudent(id)).filter(Boolean).map(s => esc(s.name));
+    return `
+      <div class="list-item">
+        <div>
+          <div class="title">${dayName(a.date)}, ${niceDate(a.date)}</div>
+          <div class="sub">${names.length === 0 ? "Everyone present" : names.length + " absent: " + names.join(", ")}</div>
+        </div>
+        <div class="actions">
+          <button class="btn light small" onclick="openAttendance('${a.date}')">Open</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function toggleAbsent(id) {
+  if (attAbsent.has(id)) attAbsent.delete(id);
+  else attAbsent.add(id);
+  attDirty = true;
+  renderAttendance();
+}
+
+function saveAttendance() {
+  const classId = document.getElementById("att-class").value;
+  const date = document.getElementById("att-date").value;
+  const ids = studentsOn(classId, date).map(s => s.id);
+  const absent = [...attAbsent].filter(id => ids.includes(id));
+  const record = findAttendance(classId, date);
+  if (record) record.absent = absent;
+  else data.attendance.push({ id: newId(), classId, date, absent });
+  saveData();
+  attDirty = false;
+  showMessage(`Attendance saved for ${className(classId)}, ${niceDate(date)}.`);
+  renderAll();
+}
+
+// Ask before throwing away taps that weren't saved
+function okToLeaveAttendance() {
+  return !attDirty || confirm("You haven't saved this attendance. Leave without saving?");
+}
+
+function openAttendance(date) {
+  if (!okToLeaveAttendance()) return;
+  document.getElementById("att-date").value = date;
+  renderAttendance();
+}
+
+["att-class", "att-date"].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener("focus", () => { el.dataset.before = el.value; });
+  el.addEventListener("change", () => {
+    if (!okToLeaveAttendance()) { el.value = el.dataset.before; return; }
+    el.dataset.before = el.value;
+    renderAttendance();
+  });
+});
+
+window.addEventListener("beforeunload", e => {
+  if (attDirty) e.preventDefault();
+});
+
+// ---------- Draw everything ----------
+function renderAll() {
+  renderClasses();
+  renderStudentForm();
+  renderStudents();
+  renderAttendance();
+}
+
+renderAll();
+</script>
+</body>
+</html>
